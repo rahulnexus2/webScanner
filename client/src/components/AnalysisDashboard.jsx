@@ -1,172 +1,104 @@
 import ScoreRing from "./ScoreRing";
-import RiskChart from "./RiskChart";
-import { getGrade, getGradeColor, getGradeSummary } from "../utils/grading";
-import { Shield, Lock, Globe, AlertTriangle, CheckCircle, XCircle, Search, Award } from "lucide-react";
+import ReasonItem from "./ReasonItem";
 
 const AnalysisDashboard = ({ result }) => {
-    const grade = getGrade(result.score);
-    const gradeColor = getGradeColor(grade);
+  const { score, status, confidence, reasons, details } = result;
 
-    const statusColors = {
-        Safe: "text-success border-success/30 bg-success/10",
-        Suspicious: "text-warning border-warning/30 bg-warning/10",
-        Dangerous: "text-danger border-danger/30 bg-danger/10",
-    };
+  const isSafe = status === "Safe";
+  const isDangerous = status === "Dangerous";
 
-    const getStatusIcon = (status) => {
-        switch (status) {
-            case "Safe": return <CheckCircle className="w-5 h-5" />;
-            case "Suspicious": return <AlertTriangle className="w-5 h-5" />;
-            case "Dangerous": return <XCircle className="w-5 h-5" />;
-            default: return <Search className="w-5 h-5" />;
-        }
-    };
+  const statusColor = isSafe ? "text-primary" : isDangerous ? "text-danger" : "text-warning";
+  const borderColor = isSafe ? "border-primary/30" : isDangerous ? "border-danger/30" : "border-warning/30";
 
-    return (
-        <div className="w-full max-w-6xl mx-auto mt-8 animate-slide-up pb-10 px-2 lg:px-0">
+  return (
+    <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up">
 
-            {/* Dashboard Header */}
-            <div className="glass rounded-xl p-6 mb-6 flex flex-col items-center justify-between gap-6 md:flex-row">
+      {/* LEFT COLUMN: Score & Core Status */}
+      <div className={`col-span-1 lg:col-span-1 glass rounded-2xl p-6 flex flex-col items-center justify-center text-center border ${borderColor} relative overflow-hidden group`}>
+        <div className={`absolute inset-0 bg-gradient-to-br ${isSafe ? "from-primary/5" : "from-danger/5"} to-transparent opacity-50`}></div>
 
-                {/* Left: Identity */}
-                <div className="flex items-center gap-5 w-full md:w-auto">
-                    <div className={`p-4 rounded-2xl ${gradeColor} border backdrop-blur-3xl shadow-[0_0_30px_rgba(0,0,0,0.3)]`}>
-                        <div className="text-center">
-                            <p className="text-[10px] uppercase font-bold tracking-widest opacity-70">Grade</p>
-                            <h1 className="text-4xl font-black tracking-tighter leading-none mt-1">{grade}</h1>
-                        </div>
-                    </div>
-                    <div>
-                        <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight truncate max-w-[200px] md:max-w-md">
-                            {result.details?.title || "Target Analyzed"}
-                        </h2>
-                        <div className="flex flex-wrap items-center gap-2 mt-2">
-                            <span className="text-slate-400 text-xs font-mono bg-white/5 px-2 py-0.5 rounded border border-white/5">
-                                {new URL(result.details?.ssl?.fingerprint ? 'https://example.com' : 'http://unknown').protocol === 'https:' ? 'HTTPS Secured' : 'Target URL'}
-                            </span>
-                            <span className={`text-[10px] font-bold uppercase tracking-wider border px-2 py-0.5 rounded-full ${statusColors[result.status]}`}>
-                                {result.status}
-                            </span>
-                        </div>
-                    </div>
-                </div>
+        <ScoreRing score={score} status={status} />
 
-                {/* Right: Score */}
-                <div className="flex items-center gap-6 border-l pl-6 border-white/5">
-                    <div className="text-right hidden md:block">
-                        <p className="text-xs text-slate-400 uppercase tracking-widest mb-1">Trust Score</p>
-                        <p className="text-xs text-slate-500 max-w-[150px] leading-tight text-right">
-                            {getGradeSummary(grade)}
-                        </p>
-                    </div>
-                    <div className="transform scale-110">
-                        <ScoreRing score={result.score} />
-                    </div>
-                </div>
-            </div>
-
-            {/* Main Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-
-                {/* Left Column: Key Metrics */}
-                <div className="md:col-span-4 space-y-6">
-                    {/* Technical Card */}
-                    <div className="glass rounded-xl p-5 border-l-4 border-l-primary/50 hover:bg-white/5 transition-colors">
-                        <div className="flex items-center gap-2 mb-4">
-                            <Lock className="w-4 h-4 text-primary" />
-                            <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">Technical Security</h3>
-                        </div>
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center p-3 bg-black/20 rounded-lg border border-white/5">
-                                <span className="text-sm text-slate-400">SSL Certificate</span>
-                                {result.details?.ssl?.valid ? (
-                                    <span className="text-xs font-bold text-success bg-success/10 px-2 py-1 rounded flex items-center gap-1">
-                                        <CheckCircle className="w-3 h-3" /> VALID
-                                    </span>
-                                ) : (
-                                    <span className="text-xs font-bold text-danger bg-danger/10 px-2 py-1 rounded">INVALID</span>
-                                )}
-                            </div>
-                            <div className="flex justify-between items-center p-3 bg-black/20 rounded-lg border border-white/5">
-                                <span className="text-sm text-slate-400">Issuer</span>
-                                <span className="text-xs text-white max-w-[120px] truncate" title={result.details?.ssl?.issuer?.O || "Unknown"}>
-                                    {result.details?.ssl?.issuer?.O || "Unknown"}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Domain Card */}
-                    <div className="glass rounded-xl p-5 border-l-4 border-l-secondary/50 hover:bg-white/5 transition-colors">
-                        <div className="flex items-center gap-2 mb-4">
-                            <Globe className="w-4 h-4 text-secondary" />
-                            <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">Domain Intelligence</h3>
-                        </div>
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center p-3 bg-black/20 rounded-lg border border-white/5">
-                                <span className="text-sm text-slate-400">Domain Age</span>
-                                <span className="text-xs font-mono text-white">
-                                    {result.details?.age || "Unknown"}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center p-3 bg-black/20 rounded-lg border border-white/5">
-                                <span className="text-sm text-slate-400">Registrar</span>
-                                <span className="text-xs text-white max-w-[120px] truncate" title="To be implemented">
-                                    Hidden (Privacy)
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Recommendation Card (New) */}
-                    <div className="glass rounded-xl p-5 border-l-4 border-l-slate-500/50">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Award className="w-4 h-4 text-slate-400" />
-                            <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">Verdict</h3>
-                        </div>
-                        <p className="text-sm text-slate-400 leading-relaxed">
-                            {getGradeSummary(grade)}
-                        </p>
-                    </div>
-                </div>
-
-                {/* Center/Right Column: Visualization & Content */}
-                <div className="md:col-span-8 space-y-6">
-
-                    {/* Risk Chart Section */}
-                    <div className="glass rounded-xl p-1 relative overflow-hidden min-h-[340px] flex items-center justify-center">
-                        <div className="absolute top-0 right-0 p-4 opacity-50">
-                            <Shield className="w-24 h-24 text-slate-700/20" />
-                        </div>
-                        <RiskChart score={result.score} details={result.details} />
-                    </div>
-
-                    {/* Detailed Log Findings */}
-                    <div className="glass rounded-xl p-6">
-                        <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <Search className="w-4 h-4" />
-                            Analysis Log
-                        </h3>
-                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                            {result.reasons.map((reason, index) => (
-                                <div key={index} className="flex items-start gap-3 p-3 bg-black/20 rounded-lg hover:bg-white/5 transition-colors border border-white/5">
-                                    <div className={`mt-1.5 w-1.5 h-1.5 rounded-full ${reason.toLowerCase().includes('valid') || reason.toLowerCase().includes('old') || reason.toLowerCase().includes('accessible') || reason.toLowerCase().includes('high trust')
-                                            ? 'bg-success shadow-[0_0_8px_rgba(0,255,157,0.5)]'
-                                            : 'bg-danger shadow-[0_0_8px_rgba(255,0,85,0.5)]'
-                                        }`}></div>
-                                    <div>
-                                        <p className="text-sm text-slate-300 font-light">{reason}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                </div>
-
-            </div>
+        <div className="mt-6 z-10">
+          <h2 className={`text-3xl font-bold tracking-tight ${statusColor} mb-2`}>{status}</h2>
+          <div className="flex items-center justify-center gap-2">
+            <span className="px-3 py-1 bg-white/5 rounded-full text-xs font-mono text-slate-400 border border-white/10">
+              CONFIDENCE: <span className="text-white">{confidence.toUpperCase()}</span>
+            </span>
+          </div>
         </div>
-    );
+      </div>
+
+      {/* MIDDLE & RIGHT: Details Grid */}
+      <div className="col-span-1 lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        {/* Domain Identity Card */}
+        <div className="glass rounded-xl p-5 border border-white/10 hover:border-primary/30 transition-colors">
+          <div className="flex items-center gap-3 mb-4 text-slate-400">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+            <h3 className="text-sm font-bold tracking-wider uppercase">Domain Identity</h3>
+          </div>
+          <div className="space-y-3">
+            <div className="flex justify-between border-b border-white/5 pb-2">
+              <span className="text-sm text-slate-500">Domain</span>
+              <span className="text-sm font-mono text-white">{details.domain}</span>
+            </div>
+            <div className="flex justify-between border-b border-white/5 pb-2">
+              <span className="text-sm text-slate-500">Age</span>
+              <span className="text-sm font-mono text-white max-w-[150px] truncate" title={details.domainAge}>{details.domainAge}</span>
+            </div>
+            <div className="flex justify-between border-b border-white/5 pb-2">
+              <span className="text-sm text-slate-500">Registrar</span>
+              <span className="text-sm font-mono text-white max-w-[150px] truncate" title={details.registrar}>{details.registrar}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Security / Infrastructure Card */}
+        <div className="glass rounded-xl p-5 border border-white/10 hover:border-primary/30 transition-colors">
+          <div className="flex items-center gap-3 mb-4 text-slate-400">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+            <h3 className="text-sm font-bold tracking-wider uppercase">Security & Tech</h3>
+          </div>
+          <div className="space-y-3">
+            <div className="flex justify-between border-b border-white/5 pb-2">
+              <span className="text-sm text-slate-500">SSL Issuer</span>
+              <span className="text-sm font-mono text-white max-w-[150px] truncate" title={details.sslIssuer}>{details.sslIssuer || "N/A"}</span>
+            </div>
+            <div className="flex justify-between border-b border-white/5 pb-2">
+              <span className="text-sm text-slate-500">Safe Browsing</span>
+              <span className={`text-sm font-mono font-bold ${details.safeBrowsing === "Clean" ? "text-success" : "text-danger"}`}>
+                {details.safeBrowsing}
+              </span>
+            </div>
+            <div className="flex justify-between border-b border-white/5 pb-2">
+              <span className="text-sm text-slate-500">Server</span>
+              <span className="text-sm font-mono text-white">{details.serverLocation}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Key Findings (Full Width) */}
+        <div className="col-span-1 md:col-span-2 glass rounded-xl p-5 border border-white/10">
+          <div className="flex items-center gap-3 mb-4 text-slate-400">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+            <h3 className="text-sm font-bold tracking-wider uppercase">Analysis Report</h3>
+          </div>
+
+          {reasons && reasons.length > 0 ? (
+            <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {reasons.map((reason, index) => (
+                <ReasonItem key={index} type={reason.type} message={reason.message} />
+              ))}
+            </ul>
+          ) : (
+            <p className="text-slate-500 italic">No significant anomalies detected.</p>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
 };
 
 export default AnalysisDashboard;

@@ -1,159 +1,164 @@
-import * as sslChecker from 'ssl-checker';
-import * as whoiser from 'whoiser';
-import axios from 'axios';
-import * as cheerio from 'cheerio';
-
-// Helper to extract domain from URL
-const getDomain = (url) => {
-    try {
-        const hostname = new URL(url).hostname;
-        return hostname;
-    } catch (error) {
-        return null;
-    }
-};
+import { checkSSL } from "../services/ssl.service.js";
+import { getWhoisData } from "../services/whois.service.js";
+import { checkSafeBrowsing } from "../services/safeBrowsing.service.js";
+import { analyzeUrl } from "../services/urlAnalysis.service.js";
+import axios from "axios";
+import * as cheerio from "cheerio";
 
 export const analyzeWebsite = async (req, res) => {
-    const { url } = req.body;
+  const { url } = req.body;
 
-    if (!url) {
-        return res.status(400).json({ error: 'URL is required' });
-    }
+  if (!url) {
+    return res.status(400).json({ error: "URL is required" });
+  }
 
-    const domain = getDomain(url);
-    if (!domain) {
-        return res.status(400).json({ error: 'Invalid URL format' });
-    }
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url.startsWith("http") ? url : `https://${url}`);
+  } catch {
+    return res.status(400).json({ error: "Invalid URL format" });
+  }
 
-    let results = {
-        score: 0,
-        status: 'Unknown',
-        reasons: [],
-        details: {}
-    };
+  const domain = parsedUrl.hostname.replace("www.", "");
+  const fullUrl = parsedUrl.href;
 
+  /* ==============================
+     RUN CHECKS PARALLEL
+     ============================== */
+  // Accessibility check helper
+  const checkAccessibility = async (targetUrl) => {
     try {
-        // 1. SSL Check
-        try {
-            const sslDetails = await sslChecker(domain);
-            results.details.ssl = sslDetails;
-            if (sslDetails.valid) {
-                results.score += 30;
-                results.reasons.push('Valid SSL Certificate detected');
-            } else {
-                results.reasons.push('SSL Certificate is invalid or missing');
-            }
-        } catch (err) {
-            results.reasons.push('Process failed: SSL Check');
-        }
-
-        // 2. Domain Age / Whois
-        try {
-            const whoisData = await whoiser.whoisDomain(domain);
-            // Whoiser returns data keyed by registrar, need to find the first valid entry with created date
-            let createdDate = null;
-            let registrarName = null;
-
-            for (const key in whoisData) {
-                const record = whoisData[key];
-                if (record['Created Date'] || record['Creation Date']) {
-                    createdDate = record['Created Date'] || record['Creation Date'];
-                    registrarName = record['Registrar'];
-                    break;
-                }
-            }
-
-            if (createdDate) {
-                const created = new Date(createdDate);
-                const copyAge = new Date();
-                const ageInDays = (copyAge - created) / (1000 * 60 * 60 * 24);
-
-                // Format age string (e.g., "5.2 years")
-                const ageInYears = (ageInDays / 365).toFixed(1);
-                results.details.age = `${ageInYears} years`;
-
-                if (ageInDays > 365) {
-                    results.score += 20;
-                    results.reasons.push('Domain is established (> 1 year)');
-                } else if (ageInDays < 30) {
-                    results.reasons.push('Domain is very new (< 30 days)');
-                    results.score -= 20; // Stricter penalty
-                } else {
-                    results.score += 10;
-                    results.reasons.push('Domain age is moderate');
-                }
-                // Bonus for very old domains
-                if (ageInDays > 1825) { // 5 years
-                    results.score += 10;
-                    results.reasons.push('High Trust: Domain > 5 years old');
-                }
-
-            } else {
-                results.reasons.push('Could not verify domain age');
-            }
-        } catch (err) {
-            console.error("Whois error", err);
-            results.reasons.push('Process failed: Domain Age Check');
-        }
-
-        // 3. Content & Header Check
-        try {
-            const response = await axios.get(url, {
-                timeout: 5000,
-                validateStatus: () => true
-            });
-
-            if (response.status === 200) {
-                results.score += 10;
-                results.reasons.push('Website is accessible (HTTP 200)');
-            } else {
-                results.reasons.push(`Website returned status ${response.status}`);
-            }
-
-            // Basic Content Analysis
-            const $ = cheerio.load(response.data);
-            const title = $('title').text();
-            results.details.title = title;
-
-            const suspiciousKeywords = ['login', 'verify', 'update', 'banking', 'secure'];
-            const bodyText = $('body').text().toLowerCase();
-
-            let foundSuspicious = false;
-            suspiciousKeywords.forEach(word => {
-                if (bodyText.includes(word)) foundSuspicious = true;
-            });
-
-            if (foundSuspicious) {
-                // Not necessarily bad, but combined with other factors it could be.
-                // For now, let's just note it.
-                results.reasons.push('Contains sensitive keywords (login, bank, etc.)');
-            }
-
-        } catch (err) {
-            results.reasons.push('Website could not be reached');
-        }
-
-        // 4. URL Heuristics (Client-side logic moved here)
-        if (url.length > 50) {
-            results.reasons.push('URL is unusually long');
-        } else {
-            results.score += 10;
-            results.reasons.push('URL length is normal');
-        }
-
-        // Normalize Score
-        if (results.score > 100) results.score = 100;
-        if (results.score < 0) results.score = 0;
-
-        // Determine Status
-        if (results.score >= 70) results.status = 'Safe';
-        else if (results.score >= 40) results.status = 'Suspicious';
-        else results.status = 'Dangerous';
-
-        res.json(results);
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Analysis failed' });
+      const response = await axios.get(targetUrl, { timeout: 5000, validateStatus: () => true });
+      return {
+        accessible: response.status === 200,
+        status: response.status,
+        data: response.data
+      };
+    } catch {
+      return { accessible: false, status: 0, data: null };
     }
+  };
+
+  const [ssl, whois, isSafe, accessibility] = await Promise.all([
+    checkSSL(domain),
+    getWhoisData(domain),
+    checkSafeBrowsing(fullUrl),
+    checkAccessibility(fullUrl)
+  ]);
+
+  const urlStats = analyzeUrl(fullUrl);
+
+  /* ==============================
+     SCORING LOGIC
+     ============================== */
+  let score = 60; // Baseline
+  const reasons = [];
+  let uncertaintyCount = 0;
+
+  // 1. SSL Check
+  if (ssl.valid) {
+    score += 15;
+    reasons.push({ type: "info", message: "Valid HTTPS connection detected" });
+  } else {
+    score -= 20;
+    reasons.push({ type: "severe", message: "Missing or invalid SSL certificate" });
+  }
+
+  // 2. Domain Age (WHOIS)
+  if (whois && whois.ageYears !== null) {
+    if (whois.ageYears > 5) {
+      score += 25;
+      reasons.push({ type: "info", message: `Domain is established (${whois.ageYears} years old)` });
+    } else if (whois.ageYears > 1) {
+      score += 15;
+      reasons.push({ type: "info", message: "Domain age is moderate" });
+    } else if (whois.ageYears > 0.25) {
+      score += 5;
+    } else {
+      score -= 20;
+      reasons.push({ type: "severe", message: "Domain is extremely new (< 3 months)" });
+    }
+  } else {
+    score -= 5;
+    uncertaintyCount++;
+    reasons.push({ type: "risk", message: "Domain age could not be verified" });
+  }
+
+  // 3. Safe Browsing (Historical Reputation)
+  if (isSafe === false) {
+    score -= 50; // Major penalty
+    reasons.push({ type: "severe", message: "Flagged by Google Safe Browsing as dangerous" });
+  } else if (isSafe === true) {
+    score += 10;
+    reasons.push({ type: "info", message: "Not found on immediate blocklists" });
+  } else {
+    // Check skipped or failed (API key missing etc)
+    uncertaintyCount++;
+  }
+
+  // 4. Accessibility & Content
+  if (accessibility.accessible) {
+    score += 10;
+    // Simple content check
+    if (accessibility.data) {
+      const $ = cheerio.load(accessibility.data);
+      const text = $("body").text().toLowerCase();
+      const suspiciousWords = ["login", "verify", "account", "update", "banking", "secure"];
+      const foundSuspicious = suspiciousWords.filter(w => text.includes(w));
+
+      if (foundSuspicious.length > 2) {
+        score -= 5;
+        reasons.push({ type: "risk", message: "Contains keywords often used in phishing" });
+      }
+    }
+  } else {
+    score -= 20;
+    reasons.push({ type: "severe", message: "Website is not reachable" });
+  }
+
+  // 5. URL Structure
+  if (urlStats.hasSuspicious) {
+    score -= 15;
+    reasons.push({ type: "risk", message: "URL contains suspicious pattern words" });
+  }
+  if (urlStats.length > 70) {
+    score -= 5;
+    reasons.push({ type: "risk", message: "URL is suspiciously long" });
+  }
+  if (urlStats.dots > 4) {
+    score -= 10;
+    reasons.push({ type: "risk", message: "Complex URL structure suspected" });
+  }
+
+  /* ==============================
+     FINALIZE
+     ============================== */
+  score = Math.max(0, Math.min(score, 100));
+
+  let status = "Safe";
+  if (score < 50) status = "Dangerous";
+  else if (score < 75) status = "Suspicious";
+
+  let confidence = "High";
+  if (uncertaintyCount >= 1) confidence = "Medium";
+  if (uncertaintyCount >= 3) confidence = "Low";
+
+  // Construct Details Object for Dashboard
+  const details = {
+    domain,
+    sslIssuer: ssl.issuer,
+    domainAge: whois?.ageYears ? `${whois.ageYears} years` : "Unknown",
+    registrar: whois?.registrar || "Unknown",
+    nameServers: whois?.nameServers || [],
+    safeBrowsing: isSafe === false ? "Detected" : (isSafe === true ? "Clean" : "Unchecked"),
+    serverLocation: "Hidden" // Placeholder or need IP lookup
+  };
+
+  res.json({
+    score,
+    status,
+    confidence,
+    reasons,
+    details
+  });
 };
