@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { scoreWebsite } from "./utils/scoreWebsite";
 import ResultCard from "./components/ResultCard";
 import Background from "./components/Background";
 
@@ -11,7 +10,7 @@ function App() {
   const isValidUrl = (value) =>
     value.startsWith("http://") || value.startsWith("https://");
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (!url) return;
 
     if (!isValidUrl(url)) {
@@ -22,12 +21,41 @@ function App() {
     setLoading(true);
     setResult(null);
 
-    // Simulate scanning delay
-    setTimeout(() => {
-      const analysis = scoreWebsite(url);
-      setResult(analysis);
+    try {
+      // ⏳ Simulated scan delay for UX consistency
+      await new Promise((res) => setTimeout(res, 1200));
+
+      // 🔗 Call backend analysis engine
+      const response = await fetch("http://localhost:5000/api/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Backend analysis failed");
+      }
+
+      const data = await response.json();
+
+      /**
+       * Expected backend response shape:
+       * {
+       *   score: number,
+       *   technical: { age, ssl },
+       *   urlAnalysis: { length, dots, hasSuspicious }
+       * }
+       */
+
+      setResult(data);
+    } catch (error) {
+      console.error(error);
+      alert("Error analyzing website. Please try again.");
+    } finally {
       setLoading(false);
-    }, 2000);
+    }
   };
 
   return (
@@ -35,7 +63,11 @@ function App() {
       <Background />
 
       {/* Header Section */}
-      <div className={`text-center transition-all duration-500 ${result ? "mt-8" : "mb-8"}`}>
+      <div
+        className={`text-center transition-all duration-500 ${
+          result ? "mt-8" : "mb-8"
+        }`}
+      >
         <h1 className="text-4xl md:text-6xl font-black bg-clip-text text-transparent bg-gradient-to-r from-primary via-white to-secondary tracking-tight mb-2">
           TrustLens
         </h1>
@@ -46,7 +78,11 @@ function App() {
 
       {/* Main Input Section */}
       <div className="w-full max-w-lg z-10 transition-all duration-500">
-        <div className={`glass p-1.5 rounded-2xl flex items-center transition-all duration-300 ${loading ? "opacity-80 pointer-events-none" : ""}`}>
+        <div
+          className={`glass p-1.5 rounded-2xl flex items-center transition-all duration-300 ${
+            loading ? "opacity-80 pointer-events-none" : ""
+          }`}
+        >
           <div className="pl-4 pr-2 text-slate-500">
             <svg
               className="w-5 h-5"
@@ -62,6 +98,7 @@ function App() {
               />
             </svg>
           </div>
+
           <input
             type="text"
             placeholder="Search or enter website URL..."
@@ -71,6 +108,7 @@ function App() {
             disabled={loading}
             className="flex-1 bg-transparent border-none outline-none text-white text-sm md:text-base placeholder-slate-500 py-3"
           />
+
           <button
             onClick={handleAnalyze}
             disabled={loading || !url}
@@ -87,7 +125,7 @@ function App() {
           </button>
         </div>
 
-        {/* Loading State Animation */}
+        {/* Loading State */}
         {loading && (
           <div className="mt-8 text-center animate-fade-in">
             <div className="inline-block relative">
@@ -116,4 +154,3 @@ function App() {
 }
 
 export default App;
-
