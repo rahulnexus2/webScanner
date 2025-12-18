@@ -1,5 +1,7 @@
 import { useState } from "react";
-import ResultCard from "./components/ResultCard";
+import { analyzeUrl } from "./utils/api";
+// import ResultCard from "./components/ResultCard"; // Deprecated
+import AnalysisDashboard from "./components/AnalysisDashboard";
 import Background from "./components/Background";
 
 function App() {
@@ -23,36 +25,13 @@ function App() {
 
     try {
       // ⏳ Simulated scan delay for UX consistency
-      await new Promise((res) => setTimeout(res, 1200));
+      await new Promise((res) => setTimeout(res, 800));
 
-      // 🔗 Call backend analysis engine
-      const response = await fetch("http://localhost:5000/api/analyze", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ url }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Backend analysis failed");
-      }
-
-      const data = await response.json();
-
-      /**
-       * Expected backend response shape:
-       * {
-       *   score: number,
-       *   technical: { age, ssl },
-       *   urlAnalysis: { length, dots, hasSuspicious }
-       * }
-       */
-
-      setResult(data);
+      const analysis = await analyzeUrl(url);
+      setResult(analysis);
     } catch (error) {
       console.error(error);
-      alert("Error analyzing website. Please try again.");
+      alert("Analysis failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -64,9 +43,8 @@ function App() {
 
       {/* Header Section */}
       <div
-        className={`text-center transition-all duration-500 ${
-          result ? "mt-8" : "mb-8"
-        }`}
+        className={`text-center transition-all duration-500 ${result ? "mt-8" : "mb-8"
+          }`}
       >
         <h1 className="text-4xl md:text-6xl font-black bg-clip-text text-transparent bg-gradient-to-r from-primary via-white to-secondary tracking-tight mb-2">
           TrustLens
@@ -76,12 +54,11 @@ function App() {
         </p>
       </div>
 
-      {/* Main Input Section */}
-      <div className="w-full max-w-lg z-10 transition-all duration-500">
+      {/* Main Input Section - Hide when result is shown for cleaner dashboard, or keep compact */}
+      <div className={`w-full max-w-lg z-10 transition-all duration-500 ${result ? "mb-6" : ""}`}>
         <div
-          className={`glass p-1.5 rounded-2xl flex items-center transition-all duration-300 ${
-            loading ? "opacity-80 pointer-events-none" : ""
-          }`}
+          className={`glass p-1.5 rounded-2xl flex items-center transition-all duration-300 ${loading ? "opacity-80 pointer-events-none" : ""
+            }`}
         >
           <div className="pl-4 pr-2 text-slate-500">
             <svg
@@ -138,13 +115,15 @@ function App() {
             </div>
           </div>
         )}
-
-        {/* Result Card */}
-        {result && !loading && <ResultCard result={result} />}
       </div>
 
+      {/* Dashboard Result */}
+      {result && !loading && (
+        <AnalysisDashboard result={result} />
+      )}
+
       {/* Footer */}
-      <footer className="fixed bottom-4 text-center w-full z-0 pointer-events-none">
+      <footer className={`fixed bottom-4 text-center w-full z-0 pointer-events-none ${result ? "hidden" : ""}`}>
         <p className="text-[10px] text-slate-600 font-mono uppercase tracking-[0.2em]">
           System Secure • Ver 2.0
         </p>
