@@ -1,0 +1,11 @@
+{
+    "name": "trustlens-monorepo",
+    "private": true,
+    "scripts": {
+        "build": "cd client && npm install && npm run build",
+        "start": "cd server && npm start"
+    },
+    "engines": {
+        "node": ">=20.0.0"
+    }
+}
